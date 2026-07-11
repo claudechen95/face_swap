@@ -1,0 +1,15 @@
+# Personal photos and generated data - not for version control
+target/
+target_swapped/
+trainingdata_cropped/
+lora_url.txt
+lora_training_result.json
+batch_swap_log.json
+
+# Images (blanket safety net)
+*.jpg
+*.jpeg
+*.png
+*.zip
+
+.DS_Store
