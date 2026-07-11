@@ -94,10 +94,3 @@ Reads every image in `target/`, runs the face+hair recipe on each, and
 writes results to `target_swapped/` (same filenames). Progress is logged to
 `batch_swap_log.json` — rerunning skips photos already marked `"ok"`, so it's
 safe to resume after an interruption or error.
-
-## Known dead end
-
-`easel-ai/advanced-face-swap` (a fal.ai endpoint meant to swap face+hair in
-one call) is confirmed broken server-side as of this writing — it hangs
-after downloading inputs and never completes. Don't spend time retrying it;
-see `face_swap_notes.md` for how this was verified.

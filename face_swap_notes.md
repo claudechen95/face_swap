@@ -51,15 +51,6 @@ geometry.
    - Limitation: only swaps inner face region (eyes/nose/mouth/jaw) — keeps the
      **original photo's hair**, not mine. Doesn't use the trained LoRA at all.
 
-3. **`easel-ai/advanced-face-swap`** (`workflow_type: user_hair`, designed to swap
-   face+hair together)
-   - Docs mark it deprecated/"no longer supported" — verified this empirically:
-     request `019f4d64-f133-7303-a34f-f836aba9910e` downloads both input images
-     successfully then **never progresses past that step** (confirmed via
-     deduped log polling over 140+ seconds — 0 new log lines after the first
-     3.2s). Genuine server-side stall, not a logging artifact. Cancelled the
-     request. **Confirmed dead, do not retry.**
-
 ## Current state
 
 - Retrained the LoRA (previous training result was only printed to console last
