@@ -96,6 +96,47 @@ Result: **19/19 succeeded**, no errors. Spot-checked several (including the
 smallest and largest/tallest) — correct scale, natural blend, hairstyle
 matches across very different scenes/lighting/aspect ratios.
 
+## FaceFusion comparison (local, separate pipeline)
+
+Tried [FaceFusion](https://github.com/facefusion/facefusion) as a local
+alternative, installed as a sibling checkout at `../facefusion` (outside
+this repo — it's a large third-party project, not vendored here).
+
+**Install gotcha (macOS):** Homebrew's `miniconda` cask installs an x86_64
+build even on Apple Silicon (installs/runs fine via Rosetta, but recent
+`onnxruntime` releases (1.26.0) no longer ship x86_64 macOS wheels — only
+arm64 — so `pip install` failed under conda). Fix: skip conda entirely,
+use a native arm64 Homebrew `python@3.12` + plain `venv`
+(`install.py --skip-conda default` supports this). `onnxruntime` then
+correctly picked up the `CoreMLExecutionProvider` for acceleration.
+
+**Result:** `facefusion_swap.py` wraps `headless-run` with `face_swapper`
+(+ optional `face_enhancer`). Tested against the same photos as the fal
+pipeline (`trainingdata_cropped/2025-07-19_19-59-53_158.jpg` as source,
+several `target/*.jpeg` as targets).
+
+Quality comparison:
+- **FaceFusion** warps the source face onto the target's exact landmarks
+  rather than regenerating it — preserves the original photo's exact
+  expression, lighting, and film grain almost perfectly. Runs locally,
+  free after setup, ~15-35s/image (CoreML). Correct scale automatically,
+  same as `fal-ai/face-swap`.
+- **fal LoRA (face+hair)** regenerates the face region from the trained
+  identity — this is *why* it can carry over the real hairstyle, but it
+  can also drift the expression (e.g. turned a closed-mouth smile into an
+  open one on one test photo) since it's generating, not warping. Costs
+  cloud API time/money per image.
+- Neither swaps hair by default for FaceFusion's `face_swapper` (no
+  `hair` face-mask-region exists, only `skin`/eyebrows/eyes/nose/mouth) —
+  same limitation as `fal-ai/face-swap`. Hair changes only come through
+  the LoRA route.
+
+Takeaway: FaceFusion is a strong free/local upgrade over `face_swap_direct`
+when you only need identity swapped and want to preserve the original
+photo's exact look. Use the fal LoRA route when the hairstyle itself needs
+to change, and accept the extra expression variance that comes with
+regenerative inpainting.
+
 ## Other notes
 - Both `face_fal.py` and `face.py` have live API keys hardcoded in plaintext —
   should move to env vars at some point.

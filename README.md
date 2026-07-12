@@ -1,9 +1,10 @@
 # face_swap
 
 Swap a person's face (and hairstyle) into other photos, using a FLUX LoRA
-trained on fal.ai. See `face_swap_notes.md` for the full debugging story
-(why the naive approach makes the face too big, and how the working recipe
-was found).
+trained on fal.ai, plus a local FaceFusion pipeline for comparison. See
+`face_swap_notes.md` for the full debugging story (why the naive approach
+makes the face too big, how the working recipe was found, and how the two
+pipelines compare in quality).
 
 ## What's here vs. what's not
 
@@ -11,8 +12,10 @@ Only code is checked in. Photos, the trained LoRA URL, and run logs are all
 gitignored (see `.gitignore`) since they're personal — you'll generate your
 own.
 
-- `face_fal.py` — core functions (training, masking, swapping)
-- `batch_swap.py` — batch-runs the pipeline over a folder of photos
+- `face_fal.py` — core functions (training, masking, swapping) via fal.ai
+- `batch_swap.py` — batch-runs the fal.ai pipeline over a folder of photos
+- `facefusion_swap.py` — wrapper around a local FaceFusion install, for
+  comparison (identity-only swap, no cloud cost, see below)
 - `face_swap_notes.md` — write-up of what was tried and why
 
 ## Setup
@@ -94,3 +97,32 @@ Reads every image in `target/`, runs the face+hair recipe on each, and
 writes results to `target_swapped/` (same filenames). Progress is logged to
 `batch_swap_log.json` — rerunning skips photos already marked `"ok"`, so it's
 safe to resume after an interruption or error.
+
+## Alternative: FaceFusion (local, identity-only)
+
+[FaceFusion](https://github.com/facefusion/facefusion) gives a free, local,
+identity-only swap (like `face_swap_direct`, but generally higher fidelity
+to the original photo's lighting/expression since it warps rather than
+regenerates). It does **not** change hairstyle — same limitation as
+`face_swap_direct`. See `face_swap_notes.md` for a full quality comparison.
+
+Setup (macOS/Apple Silicon):
+
+```bash
+brew install git ffmpeg python@3.12
+git clone https://github.com/facefusion/facefusion ../facefusion
+cd ../facefusion
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python install.py --skip-conda default
+```
+
+Don't use `brew install miniconda` on Apple Silicon — it installs an x86_64
+build, and recent `onnxruntime` no longer ships x86_64 macOS wheels. The
+plain `venv` above uses a native arm64 Python instead.
+
+Usage from this repo:
+
+```bash
+python facefusion_swap.py reference_face.jpg scene.jpg output.jpg
+```
