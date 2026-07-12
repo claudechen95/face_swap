@@ -12,10 +12,23 @@ import os
 import urllib.request
 
 import face_fal
+import facefusion_swap
 
 SRC_DIR = "target"
 OUT_DIR = "target_swapped"
 LOG_PATH = "batch_swap_log.json"
+
+# Optional final "blend/refine" pass over the fal LoRA output via FaceFusion's
+# face_enhancer. Tested on 2 images with before/after sharpness measurement
+# (face-region Laplacian variance) and it is NOT a reliable improvement: +29%
+# on one (softer, indoor low-light original) but -38% on another (already
+# sharp, daylight original) -- GFPGAN visibly over-smoothed the skin into a
+# waxy look on the second. Default OFF; see face_swap_notes.md before
+# flipping this on. When True, writes a second file alongside the unrefined
+# one (suffix "_refined") so both are kept for comparison -- never overwrites
+# the original. Requires the separate FaceFusion install (see README.md);
+# silently skipped per-image if missing.
+REFINE = False
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -63,6 +76,17 @@ for path in image_paths:
         entry["result_url"] = result_url
         entry["out_path"] = out_path
         print(f"Saved -> {out_path}")
+
+        if REFINE:
+            stem, ext = os.path.splitext(name)
+            refined_path = os.path.join(OUT_DIR, f"{stem}_refined{ext}")
+            try:
+                facefusion_swap.refine_face(out_path, refined_path)
+                entry["refined_path"] = refined_path
+                print(f"Refined -> {refined_path}")
+            except Exception as e:
+                entry["refine_error"] = repr(e)
+                print(f"Refine skipped for {name}: {e!r}")
     except Exception as e:
         entry["status"] = "error"
         entry["error"] = repr(e)

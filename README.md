@@ -98,6 +98,14 @@ writes results to `target_swapped/` (same filenames). Progress is logged to
 `batch_swap_log.json` — rerunning skips photos already marked `"ok"`, so it's
 safe to resume after an interruption or error.
 
+`batch_swap.py` has a `REFINE` flag (default `False`) that, if enabled, runs
+a FaceFusion sharpening pass on each result (writes `*_refined.jpeg`
+alongside the original, never overwrites it). **Tested and found unreliable**
+— it improves some photos and visibly over-smooths others into a waxy look.
+Read the "Refine/enhance pass" section in `face_swap_notes.md` before turning
+it on, and spot-check per image rather than trusting it blindly. Requires the
+FaceFusion setup below.
+
 ## Alternative: FaceFusion (local, identity-only)
 
 [FaceFusion](https://github.com/facefusion/facefusion) gives a free, local,
@@ -125,4 +133,7 @@ Usage from this repo:
 
 ```bash
 python facefusion_swap.py reference_face.jpg scene.jpg output.jpg
+
+# Or just refine an already-swapped image (see the reliability caveat above):
+python facefusion_swap.py - already_swapped.jpg refined.jpg --refine-only
 ```

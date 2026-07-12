@@ -137,6 +137,29 @@ photo's exact look. Use the fal LoRA route when the hairstyle itself needs
 to change, and accept the extra expression variance that comes with
 regenerative inpainting.
 
+## Refine/enhance pass on the fal LoRA output: tested, NOT reliable
+
+The pipeline diagram this repo implements ends in a "blend/refine output"
+step that wasn't explicit anywhere — the fal inpainting call blends within
+its mask boundary internally, but there was no separate sharpening/refine
+pass after it. Added `facefusion_swap.refine_face()` (FaceFusion's
+`face_enhancer` alone, no swap) to fill that gap, and measured it properly
+before trusting it — first-pass eyeballing looked like a clear win, so a
+face-region sharpness metric (Laplacian variance on a RetinaFace-detected
+face crop) was used to check on 2 separate `target_swapped/` results:
+
+- `IMG_4292.jpeg` (indoor, low light, softer original): **+29%** sharpness.
+- `IMG_4295.jpeg` (outdoor, daylight, already-sharp original): **-38%**
+  sharpness — visually confirmed as over-smoothed/waxy skin, a known GFPGAN
+  failure mode when applied to faces that are not actually degraded.
+
+**Conclusion: not a reliable improvement, image-dependent.** `REFINE` in
+`batch_swap.py` defaults to `False`. When enabled it writes a separate
+`*_refined.jpeg` file (never overwrites the original), so any use of it
+should be spot-checked per image rather than trusted blindly. Untested
+mitigation for a future pass: lower `face_enhancer_blend` (currently 60)
+to reduce the over-smoothing on already-sharp inputs.
+
 ## Other notes
 - Both `face_fal.py` and `face.py` have live API keys hardcoded in plaintext —
   should move to env vars at some point.
