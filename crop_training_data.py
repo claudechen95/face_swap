@@ -14,7 +14,6 @@ import sys
 
 import numpy as np
 from PIL import Image, ImageOps
-from retinaface import RetinaFace
 
 TARGET_FACE_RATIO = 0.518  # face bbox height / crop side, matched from trainingdata_cropped
 MIN_CROP_SIDE_WARN = 400   # flag crops smaller than this -- likely too low-res to be useful
@@ -27,6 +26,11 @@ def load_rgb(path: str) -> Image.Image:
 
 
 def detect_largest_face(im_rgb: Image.Image):
+    # Imported lazily: retinaface pulls in tensorflow, which takes well over
+    # Lambda's 10s hard INIT-phase cap to import at module load time. Deferring
+    # it here shifts that cost into the (much longer-budgeted) invoke phase.
+    from retinaface import RetinaFace
+
     arr_bgr = np.array(im_rgb)[:, :, ::-1]
     faces = RetinaFace.detect_faces(arr_bgr)
     if not isinstance(faces, dict) or not faces:

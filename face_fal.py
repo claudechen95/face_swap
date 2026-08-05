@@ -13,7 +13,6 @@ import tempfile
 
 import numpy as np
 from PIL import Image
-from retinaface import RetinaFace
 
 import fal_client
 
@@ -118,6 +117,9 @@ def build_head_hair_mask(
     fal-ai/flux-lora/inpainting expects. Saves next to image_path if
     mask_path is not given.
     """
+    # Imported lazily -- see the matching comment in crop_training_data.py.
+    from retinaface import RetinaFace
+
     image_path = os.path.expanduser(image_path)
     faces = RetinaFace.detect_faces(image_path)
     if not isinstance(faces, dict) or not faces:
