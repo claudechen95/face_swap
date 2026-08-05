@@ -40,7 +40,7 @@ def _zip_photos(photos_dir: str) -> str:
 def train_portrait_lora(
     photos_dir: str,
     trigger_phrase: str = "sksperson",
-    steps: int = 2500,
+    steps: int = 1000,
     learning_rate: float = 0.0001,
 ) -> dict:
     """

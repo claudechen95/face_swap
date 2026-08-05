@@ -2,9 +2,15 @@
 target/
 target_swapped/
 trainingdata_cropped/
-lora_url.txt
-lora_training_result.json
+*_cropped/
+lora_url*.txt
+lora_training_result*.json
 batch_swap_log.json
+*_train_request_id.txt
+train_*.log
+test_*.log
+test_*.json
+test_*.py
 
 # Images (blanket safety net)
 *.jpg
@@ -13,3 +19,4 @@ batch_swap_log.json
 *.zip
 
 .DS_Store
+.claude/settings.local.json

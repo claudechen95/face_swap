@@ -44,7 +44,7 @@ import face_fal
 result = face_fal.train_portrait_lora(
     photos_dir="trainingdata_cropped",
     trigger_phrase="sksperson",   # used in prompts later
-    steps=2500,
+    steps=1000,
 )
 lora_url = result["diffusers_lora_file"]["url"]
 
