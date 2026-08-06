@@ -14,6 +14,7 @@ import shutil
 import tempfile
 import traceback
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import fal_client
 
@@ -26,6 +27,7 @@ STEPS = 1000
 LEARNING_RATE = 0.0001
 SWAP_PROMPT_TEMPLATE = "{trigger}, natural candid portrait photo, smiling, same lighting and framing"
 SWAP_STRENGTH = 0.55  # see face_swap_notes.md -- 0.5-0.6 keeps the scene's original scale
+SWAP_CONCURRENCY = 5  # fal.ai inpainting calls are network-bound (~10-20s each); run several at once
 
 
 def _trigger_phrase(owner_id) -> str:
@@ -99,18 +101,35 @@ def poll_training(client, model: dict) -> None:
 
 
 def swap_for_lead(client, model: dict, column: str, owner_id, targets: list[dict]) -> None:
-    """Run the proven mask+swap recipe (face_swap_notes.md) for each pending target photo."""
+    """
+    Run the proven mask+swap recipe (face_swap_notes.md) for each pending
+    target photo. Two phases: mask generation runs sequentially (RetinaFace/
+    TensorFlow isn't safe to call concurrently from multiple threads), then
+    the actual fal.ai inpainting calls -- the real bottleneck, ~10-20s each
+    of mostly-idle network wait -- run concurrently.
+    """
     lora_url = model["lora_url"]
     prompt = SWAP_PROMPT_TEMPLATE.format(trigger=model["trigger_phrase"])
 
     tmp = tempfile.mkdtemp(prefix="face_swap_swap_")
     try:
+        prepared = []
         for target in targets:
             job = sio.create_swap_job(client, column, owner_id, target["id"], status="processing")
             try:
-                local_path = sio.download_photo(client, target["storage_path"], tmp)
+                local_path = sio.download_photo(
+                    client, target["storage_path"], tmp, bucket=target.get("bucket") or sio.BUCKET
+                )
                 mask_path = face_fal.build_head_hair_mask(local_path)
+                prepared.append((target, job, local_path, mask_path))
+            except Exception as exc:
+                sio.update_swap_job(client, job["id"], status="failed", error=repr(exc))
+                print(f"[swap] target={target['id']}: FAILED (prepare) {exc!r}")
+                traceback.print_exc()
 
+        def run_one(item):
+            target, job, local_path, mask_path = item
+            try:
                 urls = face_fal.face_swap_with_lora(
                     image_path=local_path,
                     mask_path=mask_path,
@@ -130,5 +149,9 @@ def swap_for_lead(client, model: dict, column: str, owner_id, targets: list[dict
                 sio.update_swap_job(client, job["id"], status="failed", error=repr(exc))
                 print(f"[swap] target={target['id']}: FAILED {exc!r}")
                 traceback.print_exc()
+
+        if prepared:
+            with ThreadPoolExecutor(max_workers=min(SWAP_CONCURRENCY, len(prepared))) as executor:
+                list(executor.map(run_one, prepared))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

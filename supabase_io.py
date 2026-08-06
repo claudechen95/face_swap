@@ -62,10 +62,10 @@ def download_photos(client: Client, column: str, owner_id, kind: str, dst_dir: s
 
 
 def list_target_photos(client: Client, column: str, owner_id) -> list[dict]:
-    """All target-kind uploaded_photos rows for this owner (id + storage_path)."""
+    """All target-kind uploaded_photos rows for this owner (id + storage_path + bucket)."""
     return (
         client.table("uploaded_photos")
-        .select("id, storage_path")
+        .select("id, storage_path, bucket")
         .eq(column, owner_id)
         .eq("kind", "target")
         .order("created_at")
@@ -74,9 +74,9 @@ def list_target_photos(client: Client, column: str, owner_id) -> list[dict]:
     )
 
 
-def download_photo(client: Client, storage_path: str, dst_dir: str) -> str:
+def download_photo(client: Client, storage_path: str, dst_dir: str, bucket: str = BUCKET) -> str:
     os.makedirs(dst_dir, exist_ok=True)
-    data = client.storage.from_(BUCKET).download(storage_path)
+    data = client.storage.from_(bucket).download(storage_path)
     local_path = os.path.join(dst_dir, os.path.basename(storage_path))
     with open(local_path, "wb") as f:
         f.write(data)
