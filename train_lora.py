@@ -25,7 +25,7 @@ def parse_args():
     return args
 
 
-def submit(photos_dir, trigger, steps, learning_rate):
+def submit(photos_dir, trigger, steps, learning_rate, webhook_url=None):
     paths = sorted(
         p for p in os.listdir(photos_dir)
         if p.lower().endswith((".jpg", ".jpeg", ".png"))
@@ -74,6 +74,7 @@ def submit(photos_dir, trigger, steps, learning_rate):
             "create_masks": True,
             "subject_crop": True,
         },
+        webhook_url=webhook_url,
     )
     return handle.request_id
 

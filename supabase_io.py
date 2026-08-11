@@ -20,12 +20,32 @@ commit them).
 from __future__ import annotations
 
 import os
+import urllib.request
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from supabase import create_client, Client
 
 BUCKET = "user-photos"
 MIN_FACE_PHOTOS = 6  # keep in sync with face/api/_lib/identity.js PHOTO_KINDS.face.min
+
+# Text markers identifying a *stored* swap_jobs.error as a transient/network
+# failure worth auto-retrying, rather than a permanent one (bad photo, no
+# face detected) that would just burn fal.ai credits forever on retry. Keep
+# in sync with pipeline.RETRYABLE_EXCEPTION_TYPES, which classifies the live
+# exception the moment it happens (this text-based check is only needed
+# because by the time list_leads_ready_to_swap() runs, all we have left is
+# the repr() string that got stored on the row). STALE_PROCESSING_MARKER is
+# reap_stale_processing_swap_jobs()'s own synthetic error text, included here
+# so a reaped job flows straight into the same auto-retry path.
+STALE_PROCESSING_MARKER = "StaleProcessingTimeout"
+RETRYABLE_ERROR_MARKERS = ("RemoteProtocolError", "ConnectError", "ConnectTimeout", "ReadTimeout", "PoolTimeout", "ConnectionError", "TimeoutError", "URLError", "Server disconnected", STALE_PROCESSING_MARKER)
+MAX_AUTO_SWAP_RETRIES = 3
+STALE_PROCESSING_MINUTES = 15  # comfortably longer than any healthy single swap (~30-60s) or even a full Lambda timeout (15 min)
+
+
+def _is_retryable_error(error_text: str | None) -> bool:
+    return bool(error_text) and any(marker in error_text for marker in RETRYABLE_ERROR_MARKERS)
 
 
 def get_client() -> Client:
@@ -102,6 +122,13 @@ def get_face_model(client: Client, column: str, owner_id) -> dict | None:
     return response.data if response is not None else None
 
 
+def get_face_model_by_request_id(client: Client, request_id: str) -> dict | None:
+    """Used by fal_webhook.py -- a training-complete webhook only carries fal's
+    own request_id, not the (column, owner_id) pair get_face_model() needs."""
+    response = client.table("face_models").select("*").eq("fal_request_id", request_id).maybe_single().execute()
+    return response.data if response is not None else None
+
+
 def create_face_model(client: Client, column: str, owner_id, **fields) -> dict:
     row = {"submission_id": None, "user_id": None, **fields, column: owner_id}
     return client.table("face_models").insert(row).execute().data[0]
@@ -136,6 +163,81 @@ def update_swap_job(client: Client, job_id, **fields) -> dict:
         .execute()
         .data[0]
     )
+
+
+def claim_swap_job_for_retry(client: Client, target_photo_id) -> dict | None:
+    """
+    Retry a target photo by flipping its existing 'failed' row back to
+    'processing', rather than inserting a new row -- swap_jobs has a unique
+    constraint on target_photo_id (that's what makes create_swap_job's
+    insert-based claim safe under concurrent invocations), so a second row
+    for the same photo is never possible, retry or not.
+
+    The .eq("status", "failed") filter makes this an atomic compare-and-swap:
+    if another invocation already claimed the retry first, this affects 0
+    rows and returns None here, rather than both invocations processing the
+    same photo.
+    """
+    rows = (
+        client.table("swap_jobs")
+        .update({"status": "processing", "error": None})
+        .eq("target_photo_id", target_photo_id)
+        .eq("status", "failed")
+        .execute()
+        .data
+    )
+    return rows[0] if rows else None
+
+
+def reap_stale_processing_swap_jobs(client: Client, stale_after_minutes: int = STALE_PROCESSING_MINUTES) -> int:
+    """
+    Mark swap_jobs stuck in 'processing' with no update in stale_after_minutes
+    as a retryable 'failed'. A row can get orphaned there if the Lambda
+    invocation handling it dies mid-flight -- e.g. a concurrent invocation
+    losing the create_swap_job claim race on a *different* target photo in
+    the same batch used to crash the whole cycle before it ever reached this
+    target's actual swap call (see pipeline.swap_for_lead). Without this,
+    'processing' is permanently excluded from list_leads_ready_to_swap(), so
+    a photo stuck this way would sit forever with no error and no retry.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=stale_after_minutes)).isoformat()
+    rows = (
+        client.table("swap_jobs")
+        .update({"status": "failed", "error": f"{STALE_PROCESSING_MARKER}: no update in {stale_after_minutes}+ minutes"})
+        .eq("status", "processing")
+        .lt("updated_at", cutoff)
+        .execute()
+        .data
+    )
+    return len(rows)
+
+
+def notify_needs_review(target_photo_id, reason: str | None) -> None:
+    """
+    Fire-and-forget ntfy alert (same topic/service the face app's Node API
+    already uses -- see face/api/notify-done.js) so the team actually finds
+    out a result needs a manual look, per the "we'll get back to you within
+    24 hours" promise shown on the results page. Never raises -- a
+    notification failure shouldn't be treated as the swap job itself failing.
+    """
+    topic = os.environ.get("NTFY_TOPIC")
+    if not topic:
+        print("Missing NTFY_TOPIC env var -- skipping needs_review notification")
+        return
+    try:
+        req = urllib.request.Request(
+            f"https://ntfy.sh/{topic}",
+            method="POST",
+            data=(reason or "No reason given").encode("utf-8"),
+            headers={
+                "Title": "Swap result needs review",
+                "Tags": "warning",
+                "Click": "https://faceswap.fit/admin",
+            },
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as exc:
+        print(f"[notify_needs_review] ntfy failed for target={target_photo_id}: {exc!r}")
 
 
 def _owners_with_face_photo_counts(client: Client) -> dict[tuple[str, object], int]:
@@ -175,16 +277,27 @@ def list_face_models_by_status(client: Client, status: str) -> list[dict]:
 def list_leads_ready_to_swap(client: Client) -> list[dict]:
     """
     face_models rows with status='ready' that have at least one target photo
-    without a matching swap_jobs row yet.
+    needing a swap: either no swap_jobs row yet, or every existing row for
+    that photo is a retryable failure (see RETRYABLE_ERROR_MARKERS) and it
+    hasn't exceeded MAX_AUTO_SWAP_RETRIES attempts. Non-retryable failures
+    (bad photo, no face detected) and photos already done/processing are
+    left alone.
     """
     ready_models = list_face_models_by_status(client, "ready")
     if not ready_models:
         return []
 
-    existing_job_target_ids = {
-        row["target_photo_id"]
-        for row in client.table("swap_jobs").select("target_photo_id").execute().data
-    }
+    jobs_by_target_id: dict[int, list[dict]] = {}
+    for row in client.table("swap_jobs").select("target_photo_id, status, error").execute().data:
+        jobs_by_target_id.setdefault(row["target_photo_id"], []).append(row)
+
+    def _needs_swap(target_id: int) -> bool:
+        jobs = jobs_by_target_id.get(target_id)
+        if not jobs:
+            return True
+        if any(j["status"] in ("done", "processing") for j in jobs):
+            return False
+        return len(jobs) < MAX_AUTO_SWAP_RETRIES and all(_is_retryable_error(j["error"]) for j in jobs)
 
     pending = []
     for model in ready_models:
@@ -194,10 +307,42 @@ def list_leads_ready_to_swap(client: Client) -> list[dict]:
             else ("user_id", model["user_id"])
         )
         targets = list_target_photos(client, column, owner_id)
-        pending_targets = [t for t in targets if t["id"] not in existing_job_target_ids]
+        pending_targets = [t for t in targets if _needs_swap(t["id"])]
         if pending_targets:
             pending.append({"model": model, "column": column, "owner_id": owner_id, "targets": pending_targets})
     return pending
+
+
+def pending_targets_for_model(client: Client, model: dict) -> tuple[str, object, list[dict]]:
+    """
+    Same 'needs a swap' filtering as list_leads_ready_to_swap(), scoped to a
+    single already-ready model -- used by fal_webhook.py to swap immediately
+    after a training-complete webhook instead of waiting for the next full
+    cycle to notice via list_leads_ready_to_swap().
+    """
+    column, owner_id = (
+        ("submission_id", model["submission_id"])
+        if model["submission_id"] is not None
+        else ("user_id", model["user_id"])
+    )
+    targets = list_target_photos(client, column, owner_id)
+    if not targets:
+        return column, owner_id, []
+
+    target_ids = [t["id"] for t in targets]
+    jobs_by_target_id: dict[int, list[dict]] = {}
+    for row in client.table("swap_jobs").select("target_photo_id, status, error").in_("target_photo_id", target_ids).execute().data:
+        jobs_by_target_id.setdefault(row["target_photo_id"], []).append(row)
+
+    def _needs_swap(target_id: int) -> bool:
+        jobs = jobs_by_target_id.get(target_id)
+        if not jobs:
+            return True
+        if any(j["status"] in ("done", "processing") for j in jobs):
+            return False
+        return len(jobs) < MAX_AUTO_SWAP_RETRIES and all(_is_retryable_error(j["error"]) for j in jobs)
+
+    return column, owner_id, [t for t in targets if _needs_swap(t["id"])]
 
 
 def delete_failed_face_models(client: Client) -> int:

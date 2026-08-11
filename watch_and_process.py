@@ -25,6 +25,10 @@ DEFAULT_INTERVAL = 30
 
 
 def run_cycle(client) -> None:
+    reaped = sio.reap_stale_processing_swap_jobs(client)
+    if reaped:
+        print(f"[reap] {reaped} swap_jobs stuck in 'processing' marked failed for retry")
+
     for column, owner_id in sio.list_leads_ready_to_train(client):
         pipeline.train_for_lead(client, column, owner_id)
 

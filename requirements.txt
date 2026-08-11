@@ -5,3 +5,4 @@ numpy==2.0.2
 pillow==11.1.0
 supabase==2.31.0
 python-dotenv==1.2.1
+anthropic==0.120.2

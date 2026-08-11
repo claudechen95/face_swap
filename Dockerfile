@@ -26,6 +26,6 @@ RUN pip install -r requirements-lambda.txt --target "${LAMBDA_TASK_ROOT}" --only
 # dependency (see requirements-lambda.txt comment) is never pulled in.
 RUN pip install retina-face==0.0.17 --no-deps --target "${LAMBDA_TASK_ROOT}"
 
-COPY crop_training_data.py train_lora.py face_fal.py supabase_io.py pipeline.py watch_and_process.py lambda_handler.py "${LAMBDA_TASK_ROOT}/"
+COPY crop_training_data.py train_lora.py face_fal.py supabase_io.py judge.py pipeline.py watch_and_process.py lambda_handler.py fal_webhook.py "${LAMBDA_TASK_ROOT}/"
 
 CMD ["lambda_handler.handler"]
