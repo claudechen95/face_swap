@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Narrowly-scoped IAM user for the face-swap mask-generation step (api/_lib/ideogram.js)
+  to call Rekognition DetectFaces from Vercel serverless functions. Deliberately does
+  NOT create an IAM Access Key -- that's created out-of-band via `aws iam create-access-key`
+  after this stack exists, so the secret material never passes through CloudFormation's
+  own stored state/outputs.
+
+Resources:
+  RekognitionDetectFacesUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: face-swap-rekognition-detect-faces
+      Policies:
+        - PolicyName: rekognition-detect-faces-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                # DetectFaces has no resource-level permissions -- it's a bare
+                # service action, not scoped to a specific Rekognition resource.
+                Action: rekognition:DetectFaces
+                Resource: '*'
+
+Outputs:
+  UserName:
+    Value: !Ref RekognitionDetectFacesUser

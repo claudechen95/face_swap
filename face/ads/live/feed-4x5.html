@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,500;9..40,700;9..40,800&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --ink:#10162a; --paper:#f7f5ef; --blue:#315cff; --coral:#ff755e; --sans:'DM Sans',sans-serif; --serif:'Playfair Display',serif; --mono:'DM Mono',monospace; }
+      * { box-sizing:border-box; margin:0; padding:0; }
+      html,body { width:1080px; height:1350px; overflow:hidden; font-family:var(--sans); }
+      .ad { position:relative; width:1080px; height:1350px; background:#0c1327; }
+      .visual { position:absolute; inset:0; }
+      .visual img { position:absolute; top:0; width:1080px; height:1350px; object-fit:cover; }
+      .before { left:0; clip-path:inset(0 30% 0 0); object-position:center 18%; }
+      .after { left:0; clip-path:inset(0 0 0 70%); object-position:center 18%; }
+      .divider { position:absolute; top:0; bottom:0; left:70%; width:4px; background:#fff; transform:translateX(-2px); box-shadow:0 0 0 2px rgba(16,22,42,.25); z-index:2; }
+      .scrim-top { position:absolute; top:0; left:0; right:0; height:260px; background:linear-gradient(to bottom, rgba(12,19,39,.75), transparent); z-index:2; }
+      .scrim-bottom { position:absolute; bottom:0; left:0; right:0; height:660px; background:linear-gradient(to top, rgba(12,19,39,.97) 45%, transparent); z-index:2; }
+      .tag { position:absolute; top:190px; z-index:3; padding:10px 16px; background:#fff; color:var(--ink); font:700 15px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .tag-before { left:28px; }
+      .tag-after { right:28px; background:var(--coral); color:#fff; }
+      .content { position:absolute; left:0; right:0; bottom:60px; z-index:3; padding:0 48px; }
+      .headline { color:#fff; font-size:58px; font-weight:800; line-height:.98; letter-spacing:-.03em; }
+      .headline em { font-family:var(--serif); font-style:italic; font-weight:700; color:var(--coral); }
+      .sub { color:#c3c8d9; font:600 18px var(--mono); text-transform:uppercase; letter-spacing:.04em; margin-top:14px; }
+      .guarantee { display:flex; align-items:center; gap:12px; margin-top:18px; padding:14px 18px; background:rgba(255,117,94,.16); border-left:4px solid var(--coral); }
+      .guarantee .heart { font-size:24px; color:var(--coral); line-height:1; }
+      .guarantee strong { display:block; color:#fff; font-size:21px; font-weight:800; letter-spacing:-.01em; }
+      .guarantee em { font-style:normal; color:var(--coral); }
+      .guarantee span { display:block; color:#aab0c4; font-size:14px; margin-top:2px; }
+      .cta { display:flex; align-items:center; justify-content:center; gap:12px; background:var(--blue); color:#fff; font-weight:700; font-size:27px; padding:20px 0; margin-top:22px; box-shadow:0 7px 0 var(--coral); text-align:center; }
+      .cta span { font-size:28px; }
+      .trust { margin-top:16px; text-align:center; color:#8f97ad; font:600 16px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .trust strong { color:#fff; }
+    </style>
+  </head>
+  <body>
+    <div class="ad">
+      <div class="visual">
+        <img class="before" src="../../assets/demo-before.jpeg" alt="" />
+        <img class="after" src="../../assets/demo-after.jpeg" alt="" />
+        <div class="divider"></div>
+      </div>
+      <div class="scrim-top"></div>
+      <div class="scrim-bottom"></div>
+      <div class="tag tag-before">Source photo</div>
+      <div class="tag tag-after">Your result</div>
+      <div class="content">
+        <div class="headline">Put your face<br />in <em>ANY</em> picture.</div>
+        <div class="sub">Private · Natural · Human-reviewed</div>
+        <div class="guarantee"><span class="heart">♡</span><div><strong>Pay <em>only</em> if you love the results.</strong><span>No upfront payment. Private preview comes first.</span></div></div>
+        <div class="cta">Get my free preview <span>→</span></div>
+        <div class="trust"><strong>4.98/5</strong> · 240+ delivered</div>
+      </div>
+    </div>
+  </body>
+</html>

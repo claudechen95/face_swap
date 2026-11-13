@@ -1,0 +1,4 @@
+.availability { margin-top: 24px; }
+.price b { display: inline-block; background: var(--coral); color: #fff; padding: 5px 8px; font: 500 10px var(--mono); letter-spacing: .05em; margin-top: 3px; }
+.guarantee-underline { position: relative; z-index: 0; display: inline; color: var(--ink); font-weight: 700; white-space: nowrap; }
+.guarantee-underline::after { content: ''; position: absolute; z-index: -1; left: -3px; right: -3px; bottom: 0; height: .44em; background: rgba(255, 117, 94, .48); transform: rotate(-1.5deg) skewX(-7deg); border-radius: 35% 12% 28% 14%; }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&display=swap" rel="stylesheet" />
+    <style>
+      :root { --ink:#10162a; --coral:#ff755e; --mono:'DM Mono',monospace; }
+      * { box-sizing:border-box; margin:0; padding:0; }
+      html,body { width:1080px; height:600px; overflow:hidden; background:#00ff00; font-family:var(--mono); }
+      .wrap { position:relative; width:1080px; height:600px; }
+      .tag { position:absolute; top:28px; padding:12px 18px; background:#fff; color:var(--ink); font:700 16px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .tag-before { left:28px; }
+      .tag-after { right:28px; background:var(--coral); color:#fff; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="tag tag-before">Source photo</div>
+      <div class="tag tag-after">Your result</div>
+    </div>
+  </body>
+</html>

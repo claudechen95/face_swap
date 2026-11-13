@@ -1,0 +1,20 @@
+# Target photos the lead's face gets swapped onto for the demo grid - the
+# same mechanic as the live product's free-preview flow (swap-library bucket).
+# These three are sourced from face_swap/target/ (the original local tool),
+# each with its own hand-painted mask - higher quality than an algorithmic
+# contour estimate, see generate.py's load_painted_mask.
+targets_dir: config/targets
+
+targets:
+  - id: cafe
+    label: "City cafe"
+    file: cafe.jpg
+    mask_file: cafe_mask.png
+  - id: tennis_club
+    label: "Tennis club"
+    file: tennis-club.jpg
+    mask_file: tennis-club_mask.png
+  - id: portrait
+    label: "Editorial portrait"
+    file: portrait.jpg
+    mask_file: portrait_mask.png

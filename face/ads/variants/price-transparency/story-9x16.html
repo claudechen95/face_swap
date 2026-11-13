@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,500;9..40,700;9..40,800&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --ink:#10162a; --paper:#f7f5ef; --blue:#315cff; --coral:#ff755e; --sans:'DM Sans',sans-serif; --serif:'Playfair Display',serif; --mono:'DM Mono',monospace; }
+      * { box-sizing:border-box; margin:0; padding:0; }
+      html,body { width:1080px; height:1920px; overflow:hidden; font-family:var(--sans); }
+      .ad { position:relative; width:1080px; height:1920px; background:#0c1327; }
+      .visual { position:absolute; inset:0; }
+      .visual img { position:absolute; top:0; width:1080px; height:1920px; object-fit:cover; }
+      .before { left:0; clip-path:inset(0 30% 0 0); object-position:center 20%; }
+      .after { left:0; clip-path:inset(0 0 0 70%); object-position:center 20%; }
+      .divider { position:absolute; top:0; bottom:0; left:70%; width:5px; background:#fff; transform:translateX(-2.5px); box-shadow:0 0 0 2px rgba(16,22,42,.25); z-index:2; }
+      .scrim-top { position:absolute; top:0; left:0; right:0; height:420px; background:linear-gradient(to bottom, rgba(12,19,39,.75), transparent); z-index:2; }
+      .scrim-bottom { position:absolute; bottom:0; left:0; right:0; height:1000px; background:linear-gradient(to top, rgba(12,19,39,.97) 40%, transparent); z-index:2; }
+      .tag { position:absolute; top:290px; z-index:3; padding:14px 20px; background:#fff; color:var(--ink); font:700 18px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .tag-before { left:32px; }
+      .tag-after { right:32px; background:var(--coral); color:#fff; }
+      .content { position:absolute; left:0; right:0; bottom:160px; z-index:3; padding:0 56px; }
+      .headline { color:#fff; font-size:76px; font-weight:800; line-height:.98; letter-spacing:-.03em; }
+      .headline em { font-family:var(--serif); font-style:italic; font-weight:700; color:var(--coral); }
+      .bullets { margin-top:32px; display:flex; flex-direction:column; gap:20px; }
+      .bullet { display:flex; align-items:flex-start; gap:16px; }
+      .bullet-icon { flex:0 0 30px; width:30px; height:30px; margin-top:2px; border-radius:50%; background:var(--coral); color:#fff; font-size:16px; font-weight:800; display:grid; place-items:center; }
+      .bullet-text { color:#fff; font-size:29px; font-weight:600; line-height:1.35; letter-spacing:-.005em; }
+      .bullet-text .accent { color:var(--coral); font-weight:800; }
+      .bullet-text .highlight { --reveal:1; position:relative; z-index:0; display:inline; color:#fff; }
+      .bullet-text .highlight::after { content:''; position:absolute; z-index:-1; left:-7px; right:-7px; bottom:-.06em; height:.8em; background:rgba(255,117,94,.5); transform:rotate(-1.2deg) skewX(-6deg) scaleX(var(--reveal)); transform-origin:left center; border-radius:35% 12% 28% 14%; }
+      .trust { margin-top:34px; text-align:center; color:#8f97ad; font:600 24px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .trust strong { color:#fff; font-size:29px; }
+    </style>
+  </head>
+  <body>
+    <div class="ad">
+      <div class="visual">
+        <img class="before" src="../../../assets/demo-before.jpeg" alt="" />
+        <img class="after" src="../../../assets/demo-after.jpeg" alt="" />
+        <div class="divider"></div>
+      </div>
+      <div class="scrim-top"></div>
+      <div class="scrim-bottom"></div>
+      <div class="tag tag-before">Source photo</div>
+      <div class="tag tag-after">Your result</div>
+      <div class="content">
+        <div class="headline">Put your face<br />in <em>ANY</em> picture.</div>
+        <div class="bullets">
+          <div class="bullet"><span class="bullet-icon">✓</span><span class="bullet-text">Custom AI model trained on 6–20 photos of your own face.</span></div>
+          <div class="bullet"><span class="bullet-icon">✓</span><span class="bullet-text">Human-reviewed. Describe <span class="accent">ANY</span> edits.</span></div>
+          <div class="bullet"><span class="bullet-icon">✓</span><span class="bullet-text">$0 upfront, <span class="highlight">$50 ONLY to unlock.</span></span></div>
+        </div>
+        <div class="trust"><strong>100%</strong> Satisfaction guarantee</div>
+      </div>
+    </div>
+  </body>
+</html>

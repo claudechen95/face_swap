@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=DM+Sans:opsz,wght@9..40,500;9..40,700;9..40,800&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --ink:#10162a; --paper:#f7f5ef; --blue:#315cff; --coral:#ff755e; --sans:'DM Sans',sans-serif; --serif:'Playfair Display',serif; --mono:'DM Mono',monospace; }
+      * { box-sizing:border-box; margin:0; padding:0; }
+      html,body { width:1080px; height:1080px; overflow:hidden; font-family:var(--sans); }
+      .ad { position:relative; width:1080px; height:1080px; background:var(--ink); }
+      .visual { position:relative; width:1080px; height:600px; overflow:hidden; background:#0c1327; }
+      .visual img { position:absolute; top:0; width:1080px; height:600px; object-fit:cover; }
+      .before { left:0; clip-path:inset(0 39% 0 0); object-position:center 22%; }
+      .after { left:0; clip-path:inset(0 0 0 61%); object-position:center 22%; }
+      .divider { position:absolute; top:0; bottom:0; left:61%; width:4px; background:#fff; transform:translateX(-2px); box-shadow:0 0 0 2px rgba(16,22,42,.25); }
+      .tag { position:absolute; top:28px; z-index:2; padding:12px 18px; background:#fff; color:var(--ink); font:700 16px var(--mono); text-transform:uppercase; letter-spacing:.04em; }
+      .tag-before { left:28px; }
+      .tag-after { right:28px; background:var(--coral); color:#fff; }
+      .content { position:relative; height:480px; padding:28px 56px 34px; display:flex; flex-direction:column; justify-content:space-between; }
+      .headline { color:#fff; font-size:56px; font-weight:800; line-height:.98; letter-spacing:-.03em; }
+      .headline em { font-family:var(--serif); font-style:italic; font-weight:700; color:var(--coral); }
+      .sub { color:#c3c8d9; font:600 19px var(--mono); text-transform:uppercase; letter-spacing:.04em; margin-top:12px; }
+      .guarantee { display:flex; align-items:center; gap:12px; margin-top:14px; padding:11px 18px; background:rgba(255,117,94,.16); border-left:5px solid var(--coral); }
+      .guarantee .heart { font-size:24px; color:var(--coral); line-height:1; }
+      .guarantee strong { display:block; color:#fff; font-size:21px; font-weight:800; letter-spacing:-.01em; }
+      .guarantee em { font-style:normal; color:var(--coral); }
+      .guarantee span { display:block; color:#aab0c4; font-size:15px; margin-top:2px; }
+      .bottom-row { display:flex; align-items:center; justify-content:space-between; }
+      .cta { display:inline-flex; align-items:center; gap:16px; background:var(--blue); color:#fff; font-weight:700; font-size:28px; padding:22px 34px; box-shadow:7px 7px 0 var(--coral); }
+      .cta span { font-size:30px; }
+      .trust { color:#8f97ad; font:600 20px var(--mono); text-transform:uppercase; letter-spacing:.04em; text-align:right; }
+      .trust strong { color:#fff; }
+    </style>
+  </head>
+  <body>
+    <div class="ad">
+      <div class="visual">
+        <img class="before" src="../../assets/demo-before.jpeg" alt="" />
+        <img class="after" src="../../assets/demo-after.jpeg" alt="" />
+        <div class="divider"></div>
+        <div class="tag tag-before">Source photo</div>
+        <div class="tag tag-after">Your result</div>
+      </div>
+      <div class="content">
+        <div>
+          <div class="headline">Put your face<br />in <em>ANY</em> picture.</div>
+          <div class="sub">Private · Natural · Human-reviewed</div>
+          <div class="guarantee"><span class="heart">♡</span><div><strong>Pay <em>only</em> if you love the results.</strong><span>No upfront payment. Private preview comes first.</span></div></div>
+        </div>
+        <div class="bottom-row">
+          <div class="cta">Get my free preview <span>→</span></div>
+          <div class="trust"><strong>4.98/5</strong><br />240+ delivered</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

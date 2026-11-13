@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Outreach review</title>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #111; color: #eee; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; }
+  .toolbar { position: sticky; top: 0; background: #111; padding: 12px 0; border-bottom: 1px solid #333; margin-bottom: 20px; z-index: 10; }
+  .toolbar button { font-size: 15px; padding: 10px 18px; background: #2a7; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .toolbar button:hover { background: #3b8; }
+  .toolbar span { margin-left: 16px; color: #999; }
+  .card { border: 1px solid #333; border-radius: 8px; padding: 16px; margin-bottom: 20px; background: #1a1a1a; }
+  .card.blocked { opacity: 0.6; }
+  .card h2 { margin: 0 0 8px; font-size: 17px; }
+  .card .tier { color: #999; font-weight: normal; font-size: 13px; }
+  .card img { max-width: 100%; border-radius: 4px; display: block; margin-bottom: 10px; }
+  .sim { font-size: 13px; color: #9cf; margin-bottom: 10px; }
+  .email { background: #0d0d0d; border: 1px solid #333; border-radius: 4px; padding: 10px; font-size: 13px; white-space: pre-wrap; margin-bottom: 10px; max-height: 220px; overflow-y: auto; }
+  .controls { display: flex; align-items: center; gap: 12px; }
+  .controls label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .controls input[type="text"] { flex: 1; padding: 6px 8px; background: #0d0d0d; border: 1px solid #333; color: #eee; border-radius: 4px; }
+  .no-email { color: #e94; font-size: 13px; }
+  .thumbnail-warning { color: #e94; font-size: 13px; margin-bottom: 10px; }
+  .blocked-reason { color: #c66; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="download-btn">Download approved.csv</button>
+  <span>Review every grid and every draft before approving. Nothing here gets sent automatically.</span>
+</div>
+
+{% for card in cards %}
+<div class="card{% if card.blocked %} blocked{% endif %}" data-slug="{{ card.slug }}">
+  <h2>{{ card.name }} <span class="tier">tier {{ card.tier }}</span></h2>
+  {% if card.blocked %}
+    <div class="blocked-reason">Blocked: {{ card.blocked_reason }}</div>
+  {% else %}
+    <img src="{{ card.grid_rel }}" alt="before/after grid for {{ card.name }}">
+    {% if card.source_is_thumbnail %}
+    <div class="thumbnail-warning">No avatar/manual photo passed the quality gate - the "Before" photo is an auto-extracted video thumbnail, which is often a mid-sentence/exaggerated clickbait expression rather than an ordinary one. Check it closely.</div>
+    {% endif %}
+    {% if card.similarities %}
+    <div class="sim">Identity similarity -
+      {% for look_id, sim in card.similarities.items() %}{{ look_id }}: {{ "%.2f"|format(sim) }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="email"><strong>Subject: {{ card.email_subject }}</strong>
+
+{{ card.email_body }}</div>
+    {% if not card.has_email %}<div class="no-email">No email on file - will become a work/{{ card.slug }}/dm.txt for manual send instead.</div>{% endif %}
+    <div class="controls">
+      <label><input type="checkbox" class="approve-cb"> Approve</label>
+      <input type="text" class="note-input" placeholder="note (optional)">
+    </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<script>
+function csvEscape(value) {
+  if (/[",\n]/.test(value)) return '"' + value.replace(/"/g, '""') + '"';
+  return value;
+}
+
+document.getElementById('download-btn').addEventListener('click', function () {
+  var rows = [['slug', 'approved', 'note']];
+  document.querySelectorAll('.card:not(.blocked)').forEach(function (card) {
+    var slug = card.getAttribute('data-slug');
+    var approved = card.querySelector('.approve-cb').checked;
+    var note = card.querySelector('.note-input').value;
+    rows.push([slug, approved ? 'true' : 'false', note]);
+  });
+  var csv = rows.map(function (r) { return r.map(csvEscape).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'approved.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
+</script>
+</body>
+</html>
