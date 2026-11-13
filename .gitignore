@@ -1,13 +1,6 @@
 # Personal photos and generated data - not for version control
 target/
 target_swapped/
-trainingdata_cropped/
-*_cropped/
-lora_url*.txt
-lora_training_result*.json
-batch_swap_log.json
-*_train_request_id.txt
-train_*.log
 test_*.log
 test_*.json
 test_*.py
@@ -18,7 +11,14 @@ test_*.py
 *.png
 *.zip
 
+# Auto-downloaded on first "Auto mask" use (see mediapipe_segment.py) --
+# regenerable, not checked in.
+*.tflite
+
 .DS_Store
 .claude/settings.local.json
 .env
 .env.*
+
+# Playwright MCP screenshot/trace scratch
+.playwright-mcp/
