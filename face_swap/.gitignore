@@ -1,0 +1,24 @@
+# Personal photos and generated data - not for version control
+target/
+target_swapped/
+test_*.log
+test_*.json
+test_*.py
+
+# Images (blanket safety net)
+*.jpg
+*.jpeg
+*.png
+*.zip
+
+# Auto-downloaded on first "Auto mask" use (see mediapipe_segment.py) --
+# regenerable, not checked in.
+*.tflite
+
+.DS_Store
+.claude/settings.local.json
+.env
+.env.*
+
+# Playwright MCP screenshot/trace scratch
+.playwright-mcp/

@@ -1,0 +1,12 @@
+fal-client==1.0.0
+retina-face==0.0.17
+numpy==2.0.2
+pillow==11.1.0
+python-dotenv==1.2.1
+requests==2.32.4
+# mediapipe depends on opencv-contrib-python specifically, not plain
+# opencv-python -- don't install both, they both ship a `cv2` module and
+# fight over it. opencv-contrib-python is a superset, so this covers every
+# existing cv2 use too.
+opencv-contrib-python==4.12.0.88
+mediapipe==1.2.3
