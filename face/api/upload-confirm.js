@@ -3,7 +3,6 @@ const { resolveIdentity, resolveKind, hasReviewedFaceMask } = require('./_lib/id
 const { triggerPipeline } = require('./_lib/triggerPipeline');
 const { checkImageSafety } = require('./_lib/contentModeration');
 const { checkSinglePersonPhoto } = require('./_lib/facePhotoJudge');
-const { buildFaceMask } = require('./_lib/ideogram');
 const { createSwapJobForTarget } = require('./_lib/swapJob');
 
 const BUCKET = 'user-photos';
@@ -141,35 +140,11 @@ module.exports = async function handler(req, res) {
     return res.status(502).json({ error: 'Could not confirm upload' });
   }
 
-  let maskUrl = null;
-  if (kindConfig.kind === 'face') {
-    try {
-      const imageResponse = await fetch(signedUrlData.signedUrl);
-      if (!imageResponse.ok) throw new Error(`fetch failed: ${imageResponse.status}`);
-      const maskBuffer = await buildFaceMask(Buffer.from(await imageResponse.arrayBuffer()));
-      const maskPath = `${identity.storagePrefix}/face_mask.png`;
-      const { error: maskUploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(maskPath, maskBuffer, { contentType: 'image/png', upsert: true });
-      if (maskUploadError) throw maskUploadError;
-
-      const { error: maskColumnError } = await supabase
-        .from('uploaded_photos')
-        .update({ mask_storage_path: maskPath })
-        .eq('id', insertedRow.id);
-      if (maskColumnError) throw maskColumnError;
-
-      const { data: signedMask, error: signMaskError } = await supabase.storage.from(BUCKET).createSignedUrl(maskPath, MODERATION_URL_TTL);
-      if (signMaskError) throw signMaskError;
-      maskUrl = signedMask.signedUrl;
-    } catch (err) {
-      // The review modal just opens with a blank canvas instead of a
-      // pre-filled one when this fails -- not a reason to fail the upload
-      // itself (checkSinglePersonPhoto above already confirmed exactly one
-      // person, but Rekognition's own face detection can still miss/error).
-      console.error('face auto-mask build failed', err);
-    }
-  }
+  // No server-side mask pre-fill anymore -- the face-mask review modal
+  // computes its own starting mask client-side (MediaPipe selfie segmentation
+  // in the browser, see upload.js's computeAutoMaskCanvas) the first time
+  // it's opened, and uploads it to mask_storage_path itself on save.
+  const maskUrl = null;
 
   if (kindConfig.kind === 'target') {
     const { data: faceRow } = await supabase

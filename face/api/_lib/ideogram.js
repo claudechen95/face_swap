@@ -1,4 +1,3 @@
-const { RekognitionClient, DetectFacesCommand } = require('@aws-sdk/client-rekognition');
 const sharp = require('sharp');
 
 // Ported verbatim from face_swap/pipeline_server.py's IDEOGRAM_CHARACTER_PROMPT --
@@ -16,145 +15,10 @@ const IDEOGRAM_CHARACTER_PROMPT =
   'face blends naturally. Keep the original composition and background unchanged. If the mask ' +
   'extends beyond the face, preserve the original content in those areas.';
 
-const rekognition = new RekognitionClient({ region: process.env.AWS_REGION || 'us-east-1' });
-
-// Rekognition's DetectFaces Bytes payload is capped at 5MB -- user uploads can be
-// up to 20MB (see MAX_FILE_BYTES in upload.js), so a copy for detection only may
-// need shrinking first. Quality doesn't matter here, only getting a bounding box.
-const FACE_DETECT_MAX_BYTES = 5 * 1024 * 1024;
-
-// Outward scale from the landmark contour's own centroid -- small now, because
-// the contour below already hugs the real jaw/chin shape rather than guessing
-// it from a bounding box, so it only needs a modest safety margin, not the 40%
-// a generic ellipse needed to reliably cover hair/jaw/ears.
-const MASK_MARGIN = 0.12;
-const MASK_BLUR_SIGMA = 6; // soft edge, same intent as face_swap's feather_px
-
-// Rekognition has no hairline/forehead landmark. Estimated from the classic
-// face-thirds proportion (hairline-to-eyebrow distance roughly equals
-// eyebrow-to-chin distance) rather than guessed from the bounding box.
-const HAIRLINE_FACTOR = 0.9;
-
-// Jawline/chin/eyebrow landmarks needed for the contour-fitted mask. Not part
-// of DetectFaces' DEFAULT attribute set (BoundingBox/Confidence/Pose/Quality/
-// Landmarks-basic-five) -- requires Attributes: ['ALL'], confirmed against
-// https://docs.aws.amazon.com/rekognition/latest/APIReference/API_Landmark.html.
-const CONTOUR_LANDMARK_TYPES = [
-  'upperJawlineLeft',
-  'midJawlineLeft',
-  'chinBottom',
-  'midJawlineRight',
-  'upperJawlineRight',
-  'leftEyeBrowUp',
-  'rightEyeBrowUp',
-];
-
-async function shrinkForDetection(imageBuffer) {
-  if (imageBuffer.length <= FACE_DETECT_MAX_BYTES) return imageBuffer;
-  return sharp(imageBuffer)
-    .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 82 })
-    .toBuffer();
-}
-
-function landmarkMap(face) {
-  const map = {};
-  for (const lm of face.Landmarks || []) map[lm.Type] = lm;
-  return map;
-}
-
-// Fallback for the rare photo where Rekognition's landmark set is incomplete
-// (e.g. partial occlusion) -- the old bounding-box ellipse, generous margin
-// since it has no real contour to anchor to.
-function ellipseMaskSvg(box, width, height) {
-  const boxWidth = box.Width * width;
-  const boxHeight = box.Height * height;
-  const centerX = (box.Left + box.Width / 2) * width;
-  const centerY = (box.Top + box.Height / 2) * height;
-  const rx = (boxWidth / 2) * 1.4;
-  const ry = (boxHeight / 2) * 1.4;
-  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100%" height="100%" fill="black" />
-    <ellipse cx="${centerX}" cy="${centerY}" rx="${rx}" ry="${ry}" fill="white" />
-  </svg>`;
-}
-
-// Detects the largest face in imageBuffer and returns a white-mask-on-black
-// PNG at the image's own dimensions -- white = regenerate, same convention
-// face_swap's own hand-painted _3mask.png files use (see ideogram.js's
-// invertForIdeogram for where that gets flipped for Ideogram's own convention).
-// The mask traces the actual jaw/chin contour from face landmarks rather than
-// approximating the whole head as one generic ellipse around the bounding box.
-async function buildFaceMask(imageBuffer) {
-  const { width, height } = await sharp(imageBuffer).metadata();
-  if (!width || !height) throw new Error('Could not read image dimensions');
-
-  const detectBuffer = await shrinkForDetection(imageBuffer);
-  const { FaceDetails } = await rekognition.send(
-    new DetectFacesCommand({ Image: { Bytes: detectBuffer }, Attributes: ['ALL'] })
-  );
-  if (!FaceDetails || !FaceDetails.length) {
-    throw new Error('No face detected in this photo');
-  }
-
-  // Ratios are relative to whatever image was analyzed, not its absolute size,
-  // so they carry over unchanged onto the original (shrinkForDetection only
-  // ever scales uniformly, never distorts aspect ratio).
-  const largest = FaceDetails.reduce((best, face) => {
-    const area = face.BoundingBox.Width * face.BoundingBox.Height;
-    return !best || area > best.area ? { face, area } : best;
-  }, null).face;
-
-  const lm = landmarkMap(largest);
-  const hasFullContour = CONTOUR_LANDMARK_TYPES.every((type) => lm[type]);
-
-  let svg;
-  if (!hasFullContour) {
-    svg = ellipseMaskSvg(largest.BoundingBox, width, height);
-  } else {
-    const px = (l) => l.X * width;
-    const py = (l) => l.Y * height;
-
-    const eyebrowY = (py(lm.leftEyeBrowUp) + py(lm.rightEyeBrowUp)) / 2;
-    const chinY = py(lm.chinBottom);
-    // The thirds-proportion estimate overshoots badly under the close-range,
-    // looking-up-at-the-camera perspective typical of phone selfies (confirmed
-    // visually - it ran well past the real hairline into the background on a
-    // test photo). Rekognition's own bounding box top is a face detector's
-    // actual estimate of where the head starts, so it's used as a ceiling: the
-    // hairline estimate can tighten that box but never extend further above it.
-    const boxTopY = largest.BoundingBox.Top * height;
-    const hairlineY = Math.max(eyebrowY - HAIRLINE_FACTOR * (chinY - eyebrowY), boxTopY);
-    const leftX = px(lm.upperJawlineLeft);
-    const rightX = px(lm.upperJawlineRight);
-
-    const contour = [
-      [leftX, py(lm.upperJawlineLeft)],
-      [px(lm.midJawlineLeft), py(lm.midJawlineLeft)],
-      [px(lm.chinBottom), chinY],
-      [px(lm.midJawlineRight), py(lm.midJawlineRight)],
-      [rightX, py(lm.upperJawlineRight)],
-      [rightX, hairlineY],
-      [leftX, hairlineY],
-    ];
-
-    const cx = contour.reduce((sum, p) => sum + p[0], 0) / contour.length;
-    const cy = contour.reduce((sum, p) => sum + p[1], 0) / contour.length;
-    const points = contour
-      .map(([x, y]) => `${cx + (x - cx) * (1 + MASK_MARGIN)},${cy + (y - cy) * (1 + MASK_MARGIN)}`)
-      .join(' ');
-
-    svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" fill="black" />
-      <polygon points="${points}" fill="white" />
-    </svg>`;
-  }
-
-  return sharp(Buffer.from(svg)).blur(MASK_BLUR_SIGMA).png().toBuffer();
-}
-
 // Ideogram's mask convention is black=selected region, white=everything else --
-// the opposite of this project's white=regenerate convention (see buildFaceMask).
+// the opposite of this project's white=regenerate convention (masks are now
+// always computed client-side in upload.js's computeAutoMaskCanvas, or
+// hand-painted, and arrive here already in that white=regenerate form).
 function invertForIdeogram(maskBuffer) {
   return sharp(maskBuffer).negate({ alpha: false }).png().toBuffer();
 }
@@ -222,4 +86,4 @@ async function runIdeogramSwap({ targetBuffer, maskBuffer, referenceBuffer, refe
   throw new Error('Ideogram generation timed out after 120s');
 }
 
-module.exports = { IDEOGRAM_CHARACTER_PROMPT, buildFaceMask, runIdeogramSwap };
+module.exports = { IDEOGRAM_CHARACTER_PROMPT, runIdeogramSwap };

@@ -564,11 +564,117 @@ function loadImageEl(imgEl, src) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Client-side auto-mask -- runs MediaPipe's selfie_multiclass segmenter
+// entirely in the browser (WASM) to give each mask modal a pixel-accurate
+// hair+face starting point instead of a blank canvas. Same model and
+// category convention as face_swap/mediapipe_segment.py's standalone script
+// (hair=1, face-skin=3), ported to the browser since this editor already
+// runs client-side and Vercel's Node serverless functions have no Python/ML
+// runtime to run that script in. Unlike the Python version, there's no
+// RetinaFace person-selection pass here -- every uploaded photo in this flow
+// is a single-person selfie or the user's own target photo, so isolating
+// "which person's blob" the way the multi-person pipeline tool needs to
+// isn't a real requirement here.
+// ---------------------------------------------------------------------------
+
+const MEDIAPIPE_TASKS_VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20';
+const MEDIAPIPE_WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.20/wasm';
+const SELFIE_MULTICLASS_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite';
+// 1 = hair, 3 = face-skin in this model's category set -- matches
+// mediapipe_segment.py's HAIR_FACE_CATEGORIES.
+const HAIR_FACE_CATEGORY_INDICES = new Set([1, 3]);
+
+let segmenterPromise = null;
+function getImageSegmenter() {
+  if (!segmenterPromise) {
+    segmenterPromise = (async () => {
+      const { FilesetResolver, ImageSegmenter } = await import(MEDIAPIPE_TASKS_VISION_URL);
+      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_BASE);
+      return ImageSegmenter.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: SELFIE_MULTICLASS_MODEL_URL },
+        runningMode: 'IMAGE',
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+      });
+    })();
+  }
+  return segmenterPromise;
+}
+
+// Segments an already-loaded <img>, returns a white(=regenerate)-on-black
+// canvas at the segmenter's own output resolution (the Tasks API matches the
+// input image's dimensions, not the model's fixed internal 256x256) with a
+// soft feathered edge -- ready to feed into a mask editor via applyMaskSource,
+// same convention as a fetched PNG mask.
+async function computeAutoMaskCanvas(imgEl) {
+  // MediaPipe's segmenter reads the image via WebGL (texImage2D), which
+  // throws a SecurityError on a cross-origin image unless it was loaded in
+  // CORS mode -- the display <img> elements aren't (plain .src assignment),
+  // so reload the same URL through a throwaway crossOrigin='anonymous' image
+  // first. The browser cache makes this a no-op network-wise.
+  const corsImg = new Image();
+  corsImg.crossOrigin = 'anonymous';
+  await loadImageEl(corsImg, imgEl.src);
+
+  const segmenter = await getImageSegmenter();
+  const result = segmenter.segment(corsImg);
+  const categoryMask = result.categoryMask;
+  const { width, height } = categoryMask;
+  const categories = categoryMask.getAsUint8Array();
+
+  const raw = document.createElement('canvas');
+  raw.width = width;
+  raw.height = height;
+  const rawCtx = raw.getContext('2d');
+  const imageData = rawCtx.createImageData(width, height);
+  for (let i = 0; i < categories.length; i++) {
+    const v = HAIR_FACE_CATEGORY_INDICES.has(categories[i]) ? 255 : 0;
+    imageData.data[i * 4] = v;
+    imageData.data[i * 4 + 1] = v;
+    imageData.data[i * 4 + 2] = v;
+    imageData.data[i * 4 + 3] = 255;
+  }
+  rawCtx.putImageData(imageData, 0, 0);
+  categoryMask.close();
+  result.close();
+
+  // Feather radius scales with image size, same resolution-independent-ratio
+  // convention as the Python script's feather_ratio.
+  const featherPx = Math.max(2, Math.round(Math.min(width, height) * 0.01));
+  const feathered = document.createElement('canvas');
+  feathered.width = width;
+  feathered.height = height;
+  const featheredCtx = feathered.getContext('2d');
+  featheredCtx.filter = `blur(${featherPx}px)`;
+  featheredCtx.drawImage(raw, 0, 0);
+  return feathered;
+}
+
 function createMaskCanvasEditor(canvas, { getBrushSize, getTool }) {
   const ctx = canvas.getContext('2d');
   const coverage = document.createElement('canvas');
   const coverageCtx = coverage.getContext('2d');
   let isDrawing = false;
+
+  // Shows the actual brush footprint while painting -- the CSS crosshair
+  // cursor alone gives no sense of how big a dab the current brush size will
+  // leave. mix-blend-mode:difference keeps the dashed ring visible against
+  // the painted red overlay and the photo underneath it, light or dark.
+  const wrap = canvas.parentElement;
+  const cursorEl = document.createElement('div');
+  cursorEl.className = 'mask-brush-cursor';
+  wrap.appendChild(cursorEl);
+
+  function updateCursor(e) {
+    const wrapRect = wrap.getBoundingClientRect();
+    const size = getBrushSize() * 2;
+    cursorEl.style.left = `${e.clientX - wrapRect.left}px`;
+    cursorEl.style.top = `${e.clientY - wrapRect.top}px`;
+    cursorEl.style.width = `${size}px`;
+    cursorEl.style.height = `${size}px`;
+  }
 
   function pointFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
@@ -608,14 +714,46 @@ function createMaskCanvasEditor(canvas, { getBrushSize, getTool }) {
 
   canvas.addEventListener('pointerdown', (e) => {
     isDrawing = true;
+    updateCursor(e);
     paintAndRender(e);
   });
   canvas.addEventListener('pointermove', (e) => {
+    updateCursor(e);
     if (isDrawing) paintAndRender(e);
+  });
+  canvas.addEventListener('pointerenter', (e) => {
+    updateCursor(e);
+    cursorEl.style.display = 'block';
+  });
+  canvas.addEventListener('pointerleave', () => {
+    cursorEl.style.display = 'none';
   });
   window.addEventListener('pointerup', () => {
     isDrawing = false;
   });
+
+  // Shared by loadMask (a fetched PNG) and loadAutoMask (a freshly computed
+  // MediaPipe segmentation canvas) -- both produce a white(=regenerate)-on-
+  // black source image, decoded here into the coverage layer's alpha channel
+  // at full strength (0-255 data, not display alpha), then rendered as the
+  // translucent red overlay.
+  function applyMaskSource(source) {
+    const off = document.createElement('canvas');
+    off.width = coverage.width;
+    off.height = coverage.height;
+    const offCtx = off.getContext('2d');
+    offCtx.drawImage(source, 0, 0, off.width, off.height);
+    const sourceData = offCtx.getImageData(0, 0, off.width, off.height);
+    const data = coverageCtx.createImageData(off.width, off.height);
+    for (let i = 0; i < sourceData.data.length; i += 4) {
+      data.data[i] = 255;
+      data.data[i + 1] = 0;
+      data.data[i + 2] = 0;
+      data.data[i + 3] = sourceData.data[i];
+    }
+    coverageCtx.putImageData(data, 0, 0);
+    renderCoverageToDisplay();
+  }
 
   return {
     resize(width, height) {
@@ -626,28 +764,17 @@ function createMaskCanvasEditor(canvas, { getBrushSize, getTool }) {
       ctx.clearRect(0, 0, width, height);
       coverageCtx.clearRect(0, 0, width, height);
     },
-    // The stored mask is white(=regenerate)-on-black -- decode it directly
-    // into the coverage layer's alpha channel at full strength (0-255 data,
-    // not display alpha), then render that as the translucent red overlay.
     async loadMask(maskUrl) {
       const maskImg = new Image();
       maskImg.crossOrigin = 'anonymous'; // drawn into a canvas that's then read back via getImageData
       await loadImageEl(maskImg, maskUrl);
-      const off = document.createElement('canvas');
-      off.width = coverage.width;
-      off.height = coverage.height;
-      const offCtx = off.getContext('2d');
-      offCtx.drawImage(maskImg, 0, 0, off.width, off.height);
-      const source = offCtx.getImageData(0, 0, off.width, off.height);
-      const data = coverageCtx.createImageData(off.width, off.height);
-      for (let i = 0; i < source.data.length; i += 4) {
-        data.data[i] = 255;
-        data.data[i + 1] = 0;
-        data.data[i + 2] = 0;
-        data.data[i + 3] = source.data[i];
-      }
-      coverageCtx.putImageData(data, 0, 0);
-      renderCoverageToDisplay();
+      applyMaskSource(maskImg);
+    },
+    // Computes a fresh MediaPipe hair+face mask from the photo already shown
+    // in this editor and loads it the same way loadMask would.
+    async loadAutoMask(photoImgEl) {
+      const maskCanvas = await computeAutoMaskCanvas(photoImgEl);
+      applyMaskSource(maskCanvas);
     },
     // Reads from the coverage layer (the real 0-255 mask data), not the
     // visible display canvas, so export is unaffected by display-only alpha.
@@ -670,6 +797,7 @@ function createMaskCanvasEditor(canvas, { getBrushSize, getTool }) {
     },
     setEnabled(enabled) {
       canvas.classList.toggle('is-disabled', !enabled);
+      if (!enabled) cursorEl.style.display = 'none';
     },
   };
 }
@@ -703,6 +831,24 @@ const faceMaskEditor = createMaskCanvasEditor(faceMaskCanvas, {
   getTool: () => faceMaskTool,
 });
 
+// Loads whichever mask already exists at maskUrl (the user's own prior save,
+// if any -- mask_storage_path is a stable, reused destination, so a non-null
+// URL here means real prior content most of the time). If there's none yet,
+// or the fetch fails (a freshly created swap_jobs row's mask_storage_path
+// has nothing uploaded to it until the user's first save/approve), computes
+// a fresh MediaPipe auto-mask from the photo as the starting point instead.
+async function loadStoredOrAutoMask(editor, maskUrl, photoImgEl) {
+  if (maskUrl) {
+    try {
+      await editor.loadMask(maskUrl);
+      return;
+    } catch (err) {
+      console.warn('stored mask failed to load, computing auto-mask instead', err);
+    }
+  }
+  await editor.loadAutoMask(photoImgEl);
+}
+
 async function openFaceMaskModal() {
   if (!facePhotoUrl) return;
   faceMaskErrorEl.hidden = true;
@@ -714,7 +860,7 @@ async function openFaceMaskModal() {
   try {
     await loadImageEl(faceMaskImg, facePhotoUrl);
     faceMaskEditor.resize(faceMaskImg.naturalWidth, faceMaskImg.naturalHeight);
-    if (faceMaskUrl) await faceMaskEditor.loadMask(faceMaskUrl);
+    await loadStoredOrAutoMask(faceMaskEditor, faceMaskUrl, faceMaskImg);
   } catch (err) {
     console.error('load face mask failed', err);
     faceMaskErrorEl.textContent = "Couldn't load your photo. Please try again.";
@@ -826,9 +972,11 @@ async function openTargetMaskModal(job) {
     await Promise.all([loadImageEl(targetMaskImg, job.targetUrl), loadImageEl(targetMaskReferenceImg, job.referenceUrl)]);
     targetMaskEditor.resize(targetMaskImg.naturalWidth, targetMaskImg.naturalHeight);
     targetMaskReferenceEditor.resize(targetMaskReferenceImg.naturalWidth, targetMaskReferenceImg.naturalHeight);
-    if (job.maskUrl) await targetMaskEditor.loadMask(job.maskUrl);
-    // Either auto-mask can fail to generate (e.g. no face detected) -- leave
-    // that canvas blank/unedited rather than erroring the whole modal.
+    await loadStoredOrAutoMask(targetMaskEditor, job.maskUrl, targetMaskImg);
+    // The reference mask is a copy of the already-reviewed face mask (see
+    // api/_lib/swapJob.js), not independently auto-masked -- if it's
+    // missing, leave that canvas blank/unedited rather than erroring the
+    // whole modal.
     if (job.referenceMaskUrl) await targetMaskReferenceEditor.loadMask(job.referenceMaskUrl);
   } catch (err) {
     console.error('load target mask failed', err);
@@ -1004,6 +1152,19 @@ function renderJobs(jobs, regenerateCap) {
       img.alt = '';
       photoBtn.appendChild(img);
       photoBtn.addEventListener('click', () => openLightbox(job.url, job.downloadUrl));
+      li.appendChild(photoBtn);
+    }
+
+    if (job.status === 'mask_review' && job.targetUrl) {
+      const photoBtn = document.createElement('button');
+      photoBtn.type = 'button';
+      photoBtn.className = 'result-card-photo';
+      photoBtn.setAttribute('aria-label', 'Review and swap this photo');
+      const img = document.createElement('img');
+      img.src = job.targetUrl;
+      img.alt = '';
+      photoBtn.appendChild(img);
+      photoBtn.addEventListener('click', () => openTargetMaskModal(job));
       li.appendChild(photoBtn);
     }
 
