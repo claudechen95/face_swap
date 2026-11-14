@@ -2,11 +2,13 @@
   "name": "shared",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/server.ts"
+    "./server": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.20",

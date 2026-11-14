@@ -6,8 +6,8 @@
     "shared"
   ],
   "scripts": {
-    "build": "vite build --config vite.build.config.ts",
-    "dev:build": "vite build --config vite.build.config.ts --watch",
+    "build": "npm run build --workspace=shared && vite build --config vite.build.config.ts",
+    "dev:build": "npm run build --workspace=shared && vite build --config vite.build.config.ts --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {

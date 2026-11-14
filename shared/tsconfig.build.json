@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node10",
+    "lib": ["ES2022"],
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist"
+  },
+  "include": ["src/server.ts", "src/ideogram.ts"]
+}
