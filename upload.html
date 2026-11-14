@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Your swaps — Better Hello Studio</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="upload.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <nav class="nav wrap" aria-label="Main navigation">
+        <a class="logo" href="/" aria-label="Better Hello Studio home"><span>◐</span> Better Hello Studio</a>
+      </nav>
+
+      <main>
+        <section class="upload-page wrap">
+          <div class="upload-card">
+            <p class="eyebrow"><i></i> Private upload</p>
+
+            <div class="upload-state" data-state="loading">
+              <h1>Checking your link…</h1>
+              <p class="upload-sub" data-loading-error hidden>Something went wrong. <a href="#" data-retry-link>Try again</a></p>
+            </div>
+
+            <div class="upload-state" data-state="invalid" hidden>
+              <h1>This link isn't valid</h1>
+              <p class="upload-sub">It may have expired or been typed incorrectly. Email us and we'll send you a fresh one.</p>
+              <a class="button button-primary" href="mailto:contact@faceswap.fit?subject=Upload%20link%20issue">Email contact@faceswap.fit <span>→</span></a>
+            </div>
+
+            <div class="upload-state" data-state="signin" hidden>
+              <h1 data-signin-title>Sign in to continue</h1>
+              <p class="upload-sub" data-signin-sub>Verify your phone number to reach your private page.</p>
+
+              <form class="modal-form" data-signin-phone-form novalidate onsubmit="return false">
+                <label data-signin-name-field hidden>Full name<input type="text" name="name" autocomplete="name" /></label>
+                <label data-signin-email-field hidden>Email<input type="email" name="email" autocomplete="email" /></label>
+                <label>Phone number<input type="tel" name="phone" required autocomplete="tel" placeholder="+1 555 555 5555" /></label>
+                <p class="upload-error" role="alert" hidden></p>
+                <button class="button button-primary" type="submit">Send code <span>→</span></button>
+              </form>
+              <form class="modal-form" data-signin-otp-form novalidate hidden onsubmit="return false">
+                <p class="upload-sub">Enter the code we texted to <strong data-signin-otp-phone></strong>.</p>
+                <label>Verification code<input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></label>
+                <p class="upload-error" role="alert" hidden></p>
+                <button class="button button-primary" type="submit">Verify <span>→</span></button>
+                <button class="modal-otp-back" type="button" data-signin-otp-back>Use a different number</button>
+              </form>
+            </div>
+
+            <div class="upload-state" data-state="ready" hidden>
+              <h1>Hi <span data-name></span></h1>
+
+              <section class="page-section" data-section="face">
+                <h2 class="section-heading">Your face photo</h2>
+                <p class="upload-sub" data-sub></p>
+
+                <p class="upload-tips-label">Make sure your photo:</p>
+                <ul class="upload-tips">
+                  <li><img src="assets/guide-frontal.jpg" alt="Example of a clear photo facing the camera" /><span>Faces the camera clearly</span></li>
+                </ul>
+
+                <label class="dropzone" data-dropzone for="face-file-input">
+                  <input type="file" id="face-file-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden />
+                  <span class="dropzone-icon">＋</span>
+                  <span class="dropzone-label">Click to choose a photo, or drag it here</span>
+                  <span class="dropzone-hint">JPG, PNG, WEBP, or HEIC · up to 20MB</span>
+                </label>
+
+                <p class="upload-error" role="alert" hidden></p>
+                <ul class="file-list"></ul>
+
+                <div class="face-photo-card" data-face-photo-card hidden>
+                  <div class="face-photo-preview">
+                    <img data-face-photo-img alt="Your face photo" />
+                    <canvas data-face-photo-mask-canvas aria-hidden="true"></canvas>
+                    <div class="face-photo-overlay-actions">
+                      <button type="button" class="face-photo-overlay-btn" data-face-mask-open><span data-face-mask-open-label>Review mask</span></button>
+                      <button type="button" class="face-photo-overlay-btn" data-face-photo-replace>Replace</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <hr class="section-divider" />
+
+              <section class="page-section" data-section="target">
+                <h2 class="section-heading">Photos to swap your face into</h2>
+                <p class="upload-sub" data-sub></p>
+
+                <div class="target-locked" data-target-locked hidden>
+                  <p data-target-locked-msg>Review your face mask to unlock target photos.</p>
+                  <button type="button" class="button button-primary" data-target-locked-review hidden>Review face mask <span>→</span></button>
+                </div>
+
+                <div data-target-content>
+                  <div class="library-section">
+                    <h3 class="library-heading">Choose from our library</h3>
+                    <p class="library-error" role="alert" hidden></p>
+                    <ul class="library-grid" data-library-grid></ul>
+                    <button class="text-link library-show-more" type="button" data-library-show-more hidden>Show more <span>→</span></button>
+                  </div>
+
+                  <p class="library-divider"><span>or upload your own</span></p>
+
+                  <label class="dropzone" data-dropzone for="target-file-input">
+                    <input type="file" id="target-file-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+                    <span class="dropzone-icon">＋</span>
+                    <span class="dropzone-label">Click to choose photos, or drag them here</span>
+                    <span class="dropzone-hint">JPG, PNG, WEBP, or HEIC · up to 20MB each</span>
+                  </label>
+
+                  <p class="upload-error" role="alert" hidden></p>
+                  <ul class="file-list"></ul>
+                </div>
+              </section>
+
+              <hr class="section-divider" />
+
+              <section class="page-section" data-section="results">
+                <h2 class="section-heading">Your results</h2>
+
+                <p class="upload-sub" data-results-empty>Pick a photo above and your swaps will show up here.</p>
+                <ul class="results-grid" data-results-grid hidden></ul>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer wrap"><a class="logo" href="/"><span>◐</span> Better Hello Studio</a><p>Made for better hellos.</p><p>© 2026 Better Hello Studio · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p></footer>
+    </div>
+
+    <div class="modal-overlay lightbox-overlay" data-lightbox hidden>
+      <div class="lightbox-panel">
+        <button class="modal-close" type="button" data-lightbox-close aria-label="Close">✕</button>
+        <img data-lightbox-img alt="" />
+        <div class="lightbox-footer">
+          <a data-lightbox-download download><span aria-hidden="true">↓</span> Download</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" data-face-mask-modal hidden>
+      <div class="modal-panel mask-modal-panel">
+        <button class="modal-close" type="button" data-face-mask-close aria-label="Close">✕</button>
+        <h3>Review your face mask</h3>
+        <p class="modal-sub">The highlighted area is what we'll replace in your swap photos. Paint or erase to adjust it, then save to continue.</p>
+        <div class="mask-canvas-wrap" data-face-mask-canvas-wrap>
+          <img data-face-mask-img alt="Your face photo" />
+          <canvas data-face-mask-canvas></canvas>
+        </div>
+        <div class="mask-editor-tools">
+          <button type="button" class="is-active" data-face-mask-tool="paint">Paint</button>
+          <button type="button" data-face-mask-tool="erase">Erase</button>
+          <label>Brush size <input type="range" min="10" max="150" value="40" data-face-mask-brush-size /></label>
+          <button type="button" class="button-link" data-face-mask-auto>Auto mask</button>
+        </div>
+        <p class="upload-error" role="alert" hidden data-face-mask-error></p>
+        <div class="mask-modal-actions">
+          <button type="button" class="button button-primary" data-face-mask-save>Save &amp; continue <span>→</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" data-target-mask-modal hidden>
+      <div class="modal-panel mask-modal-panel mask-modal-panel-wide">
+        <button class="modal-close" type="button" data-target-mask-close aria-label="Close">✕</button>
+        <h3>Review this swap's masks</h3>
+        <p class="modal-sub">The highlighted areas are what we'll swap. Paint or erase either mask, then approve to run the swap.</p>
+        <div class="mask-editor">
+          <div class="mask-canvas-col">
+            <p class="mask-canvas-label">Target photo</p>
+            <div class="mask-canvas-wrap">
+              <img data-target-mask-img alt="Target photo" />
+              <canvas data-target-mask-canvas></canvas>
+              <div class="mask-loading-overlay" data-target-mask-loading>
+                <span class="mask-loading-spinner" aria-hidden="true"></span>
+                <span>Loading…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mask-editor-tools">
+          <button type="button" class="is-active" data-target-mask-tool="paint">Paint</button>
+          <button type="button" data-target-mask-tool="erase">Erase</button>
+          <label>Brush size <input type="range" min="10" max="150" value="40" data-target-mask-brush-size /></label>
+          <button type="button" class="button-link" data-target-mask-auto>Auto mask</button>
+        </div>
+        <div class="mask-editor-instructions">
+          <label for="target-mask-instructions">Pose or direction (optional)</label>
+          <textarea id="target-mask-instructions" data-target-mask-instructions maxlength="300" placeholder="e.g. &quot;look toward the camera&quot; or &quot;turn head slightly left&quot;"></textarea>
+        </div>
+        <p class="upload-error" role="alert" hidden data-target-mask-error></p>
+        <div class="mask-modal-actions">
+          <button type="button" class="button button-primary" data-target-mask-approve>Approve &amp; run swap <span>→</span></button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1014036231394503');
+      fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1014036231394503&ev=PageView&noscript=1" /></noscript>
+    <script>
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.uploadQueue.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      posthog.init('phc_kVgtvehg98JwBRYhzvXTQC6GyAduxQWJezuMKdwRRFbo',{api_host:'https://us.i.posthog.com',person_profiles:'identified_only'})
+    </script>
+    <script type="module" src="/dist/upload.js"></script>
+  </body>
+</html>

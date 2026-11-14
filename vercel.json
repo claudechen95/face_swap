@@ -1,0 +1,24 @@
+{
+  "framework": null,
+  "devCommand": "python3 -m http.server $PORT",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".",
+  "functions": {
+    "api/notify-done.ts": { "maxDuration": 30 },
+    "api/upload-confirm.ts": { "maxDuration": 30 },
+    "api/library.ts": { "maxDuration": 30 },
+    "api/results-init.ts": { "maxDuration": 150 },
+    "api/admin-pipeline-data.ts": { "maxDuration": 30 },
+    "api/admin-pipeline-action.ts": { "maxDuration": 30 },
+    "api/admin-pipeline-run.ts": { "maxDuration": 30 }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/api/admin" },
+    { "source": "/admin-pipeline", "destination": "/api/admin-pipeline" },
+    { "source": "/upload", "destination": "/upload.html" },
+    { "source": "/swap", "destination": "/upload.html" },
+    { "source": "/results", "destination": "/upload.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" }
+  ]
+}
