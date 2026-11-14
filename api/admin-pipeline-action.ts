@@ -5,18 +5,27 @@ import sharp from 'sharp';
 import { requireAdminAuth } from './_lib/adminAuth.js';
 import { getSupabaseClient } from './_lib/supabaseClient.js';
 import { sendError } from './_lib/http.js';
-import { ADMIN_PIPELINE_BUCKET } from './_lib/constants.js';
-import { CHARACTER_REFERENCE_MASK_PATH, CHARACTER_REFERENCE_PATH, clearReferenceMask } from './_lib/pipelineReference.js';
+import { signGrouped } from './_lib/signStorage.js';
+import { ADMIN_PIPELINE_BUCKET, ADMIN_PIPELINE_SIGN_TTL } from './_lib/constants.js';
+import { CHARACTER_REFERENCE_MASK_PATH, CHARACTER_REFERENCE_PATH, characterReferenceStatus, clearReferenceMask } from './_lib/pipelineReference.js';
+import { startUpscaleJob, startIdeogramJob, advanceJob, type PipelinePhotoRow, type PipelineJobRow } from './_lib/pipelineJobs.js';
 
 /**
- * Fast admin-pipeline mutations, dispatched by POST body `{action, ...}`
- * (mirrors admin-action.ts's style). Replaces face_swap/server/app.ts's
- * /upload, /remove, /remove-result, /run/crop, /save-mask,
- * /upload-character-reference, /save-reference-mask, plus the project
- * CRUD the CLI's --project flag used to handle. The slow, API-bound
- * actions (upscale, Ideogram) live in admin-pipeline-run.ts instead, as an
- * async job so no single call here ever blocks for more than a few
- * seconds.
+ * All admin-pipeline endpoints in one function, to stay under Vercel
+ * Hobby's 12-serverless-function cap -- GET is read-only resources
+ * (dispatched by `?resource=`, was admin-pipeline-data.ts), POST is every
+ * mutation and async job step (dispatched by body `{action, ...}`, was
+ * admin-pipeline-action.ts + admin-pipeline-run.ts). Replaces
+ * face_swap/server/app.ts's /projects, /character-reference-status,
+ * /character-reference, /character-reference-mask, /state, /upload,
+ * /remove, /remove-result, /run/crop, /run/upscale, /run/ideogram,
+ * /save-mask, /upload-character-reference, /save-reference-mask, plus the
+ * project CRUD the CLI's --project flag used to handle. Every image
+ * reference is a pre-signed Supabase Storage URL embedded directly in the
+ * JSON response, so there's no equivalent of the old byte-proxy
+ * /images/:name route. The slow, API-bound actions (upscale, Ideogram)
+ * never block inside a single call -- they start a job and advance one
+ * non-blocking step per poll-job call instead (see pipelineJobs.ts).
  */
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -305,16 +314,153 @@ async function handleRemoveResult(req: VercelRequest, res: VercelResponse, supab
   return res.status(200).json({ ok: true });
 }
 
-module.exports = async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
-    return sendError(res, 405, 'Method not allowed');
+// ---------------------------------------------------------------------------
+// Async job steps (start-upscale/start-ideogram/poll-job) -- the thin HTTP
+// wrapper around pipelineJobs.ts's state machine, was admin-pipeline-run.ts.
+// ---------------------------------------------------------------------------
+
+async function getPhotoForJob(supabase: SupabaseClient, photoId: string): Promise<PipelinePhotoRow> {
+  const { data, error } = await supabase.from('pipeline_photos').select('*').eq('id', photoId).single();
+  if (error || !data) throw new Error('photo not found');
+  return data as PipelinePhotoRow;
+}
+
+async function getJob(supabase: SupabaseClient, jobId: string): Promise<PipelineJobRow> {
+  const { data, error } = await supabase.from('pipeline_jobs').select('*').eq('id', jobId).single();
+  if (error || !data) throw new Error('job not found');
+  return data as PipelineJobRow;
+}
+
+async function handleStartUpscale(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  const { photoId, target } = req.body || {};
+  if (!photoId || !Number.isFinite(target)) return sendError(res, 400, 'Missing photoId or target');
+
+  try {
+    const photo = await getPhotoForJob(supabase, photoId);
+    const job = await startUpscaleJob(supabase, photo, target);
+    return res.status(200).json(job);
+  } catch (err) {
+    console.error('start-upscale failed', err);
+    return sendError(res, 500, (err as Error).message);
   }
-  if (!requireAdminAuth(req, res)) return;
+}
 
-  const supabase = getSupabaseClient(res);
-  if (!supabase) return;
+async function handleStartIdeogram(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  const { photoId, expression } = req.body || {};
+  if (!photoId) return sendError(res, 400, 'Missing photoId');
 
+  try {
+    const photo = await getPhotoForJob(supabase, photoId);
+    const job = await startIdeogramJob(supabase, photo, expression || null);
+    return res.status(200).json(job);
+  } catch (err) {
+    console.error('start-ideogram failed', err);
+    return sendError(res, 500, (err as Error).message);
+  }
+}
+
+async function handlePollJob(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  const { jobId } = req.body || {};
+  if (!jobId) return sendError(res, 400, 'Missing jobId');
+
+  try {
+    const job = await getJob(supabase, jobId);
+    const photo = await getPhotoForJob(supabase, job.photo_id);
+    const advanced = await advanceJob(supabase, job, photo);
+    return res.status(200).json(advanced);
+  } catch (err) {
+    console.error('poll-job failed', err);
+    return sendError(res, 500, (err as Error).message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Read-only resources (?resource=), was admin-pipeline-data.ts.
+// ---------------------------------------------------------------------------
+
+async function handleProjects(res: VercelResponse, supabase: SupabaseClient) {
+  const { data, error } = await supabase.from('pipeline_projects').select('id, label').order('created_at', { ascending: true });
+  if (error) {
+    console.error('pipeline_projects query failed', error);
+    return sendError(res, 500, 'Could not load projects');
+  }
+  return res.status(200).json(data);
+}
+
+async function handleReference(res: VercelResponse, supabase: SupabaseClient) {
+  const status = await characterReferenceStatus(supabase);
+  const entries = [];
+  if (status.hasReference) entries.push({ bucket: ADMIN_PIPELINE_BUCKET, path: CHARACTER_REFERENCE_PATH });
+  if (status.hasReferenceMask) entries.push({ bucket: ADMIN_PIPELINE_BUCKET, path: CHARACTER_REFERENCE_MASK_PATH });
+
+  const urls = entries.length ? await signGrouped(supabase, entries, ADMIN_PIPELINE_SIGN_TTL) : {};
+  return res.status(200).json({
+    hasReference: status.hasReference,
+    hasReferenceMask: status.hasReferenceMask,
+    referenceUrl: status.hasReference ? urls[`${ADMIN_PIPELINE_BUCKET}::${CHARACTER_REFERENCE_PATH}`] : null,
+    referenceMaskUrl: status.hasReferenceMask ? urls[`${ADMIN_PIPELINE_BUCKET}::${CHARACTER_REFERENCE_MASK_PATH}`] : null,
+  });
+}
+
+async function handleState(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  const projectId = String(req.query.projectId || '');
+  if (!projectId) return sendError(res, 400, 'Missing projectId');
+
+  const { data: photos, error } = await supabase
+    .from('pipeline_photos')
+    .select('*, pipeline_results(id, storage_path, delivered_filename, prompt, expression, created_at)')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('pipeline_photos query failed', error);
+    return sendError(res, 500, 'Could not load project state');
+  }
+
+  const entries: { bucket: string; path: string }[] = [];
+  for (const photo of photos) {
+    for (const path of [photo.original_storage_path, photo.crop_storage_path, photo.upscale_storage_path, photo.mask_storage_path, photo.mask_preview_storage_path]) {
+      if (path) entries.push({ bucket: ADMIN_PIPELINE_BUCKET, path });
+    }
+    for (const result of photo.pipeline_results) {
+      entries.push({ bucket: ADMIN_PIPELINE_BUCKET, path: result.storage_path });
+    }
+  }
+  const urls = entries.length ? await signGrouped(supabase, entries, ADMIN_PIPELINE_SIGN_TTL) : {};
+  const urlFor = (path: string | null) => (path ? urls[`${ADMIN_PIPELINE_BUCKET}::${path}`] ?? null : null);
+
+  const rows = photos.map((photo) => ({
+    id: photo.id,
+    originalFilename: photo.original_filename,
+    originalUrl: urlFor(photo.original_storage_path),
+    cropUrl: urlFor(photo.crop_storage_path),
+    upscaleUrl: urlFor(photo.upscale_storage_path),
+    upscaleTarget: photo.upscale_target,
+    maskUrl: urlFor(photo.mask_storage_path),
+    maskPreviewUrl: urlFor(photo.mask_preview_storage_path),
+    hasMask: Boolean(photo.mask_storage_path),
+    hasCrop: Boolean(photo.crop_storage_path),
+    results: photo.pipeline_results.map((result: { id: string; storage_path: string; delivered_filename: string; prompt: string; expression: string | null }) => ({
+      id: result.id,
+      url: urlFor(result.storage_path),
+      deliveredFilename: result.delivered_filename,
+      prompt: result.prompt,
+      expression: result.expression,
+    })),
+  }));
+
+  return res.status(200).json(rows);
+}
+
+async function handleGet(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
+  const resource = String(req.query.resource || '');
+  if (resource === 'projects') return handleProjects(res, supabase);
+  if (resource === 'reference') return handleReference(res, supabase);
+  if (resource === 'state') return handleState(req, res, supabase);
+  return sendError(res, 400, 'Unknown resource');
+}
+
+async function handlePost(req: VercelRequest, res: VercelResponse, supabase: SupabaseClient) {
   const { action } = req.body || {};
   switch (action) {
     case 'create-project':
@@ -337,7 +483,26 @@ module.exports = async function handler(req: VercelRequest, res: VercelResponse)
       return handleRemovePhoto(req, res, supabase);
     case 'remove-result':
       return handleRemoveResult(req, res, supabase);
+    case 'start-upscale':
+      return handleStartUpscale(req, res, supabase);
+    case 'start-ideogram':
+      return handleStartIdeogram(req, res, supabase);
+    case 'poll-job':
+      return handlePollJob(req, res, supabase);
     default:
       return sendError(res, 400, 'Unknown action');
   }
+}
+
+module.exports = async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST');
+    return sendError(res, 405, 'Method not allowed');
+  }
+  if (!requireAdminAuth(req, res)) return;
+
+  const supabase = getSupabaseClient(res);
+  if (!supabase) return;
+
+  return req.method === 'GET' ? handleGet(req, res, supabase) : handlePost(req, res, supabase);
 };

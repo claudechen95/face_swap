@@ -58,7 +58,7 @@ async function actionPost(action: string, body: Record<string, unknown> = {}): P
 }
 
 async function runPost(action: string, body: Record<string, unknown> = {}): Promise<any> {
-  const r = await fetch('/api/admin-pipeline-run', {
+  const r = await fetch('/api/admin-pipeline-action', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, ...body }),
@@ -70,7 +70,7 @@ async function runPost(action: string, body: Record<string, unknown> = {}): Prom
 
 async function dataGet(resource: string, params: Record<string, string> = {}): Promise<any> {
   const qs = new URLSearchParams({ resource, ...params });
-  const r = await fetch(`/api/admin-pipeline-data?${qs}`);
+  const r = await fetch(`/api/admin-pipeline-action?${qs}`);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `${resource} failed`);
   return j;

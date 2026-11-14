@@ -4,3 +4,7 @@ dist/
 .vercel
 .env*.local
 .env*
+
+# Stale local runtime state from before outreach-pipeline moved to
+# lead-generation/outreach-pipeline/ -- never tracked, contains credentials.
+/outreach-pipeline/
